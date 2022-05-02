@@ -1,11 +1,9 @@
 import * as AWS from 'aws-sdk'
 const AWSXRay = require('aws-xray-sdk')
-// import { APIGatewayProxyHandler, APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import { DocumentClient } from 'aws-sdk/clients/dynamodb'
 import { createLogger } from '../utils/logger'
 import { TodoItem } from '../models/TodoItem'
 import { TodoUpdate } from '../models/TodoUpdate';
-// import { stringify } from 'querystring'
 
 const client = new AWS.DynamoDB.DocumentClient({
   service: new AWS.DynamoDB({
