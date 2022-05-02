@@ -1,6 +1,5 @@
 import { CustomAuthorizerEvent, CustomAuthorizerResult } from 'aws-lambda'
 import 'source-map-support/register'
-
 import { verify, decode } from 'jsonwebtoken'
 import { createLogger } from '../../utils/logger'
 import Axios from 'axios'
@@ -9,10 +8,7 @@ import { JwtPayload } from '../../auth/JwtPayload'
 
 const logger = createLogger('auth')
 
-// TODO: Provide a URL that can be used to download a certificate that can be used
-// to verify JWT token signature.
-// To get this URL you need to go to an Auth0 page -> Show Advanced Settings -> Endpoints -> JSON Web Key Set
-const jwksUrl = '...'
+const jwksUrl = 'https://dev-vqgdt17t.us.auth0.com/.well-known/jwks.json'
 
 export const handler = async (
   event: CustomAuthorizerEvent
@@ -55,13 +51,38 @@ export const handler = async (
 }
 
 async function verifyToken(authHeader: string): Promise<JwtPayload> {
-  const token = getToken(authHeader)
-  const jwt: Jwt = decode(token, { complete: true }) as Jwt
 
-  // TODO: Implement token verification
-  // You should implement it similarly to how it was implemented for the exercise for the lesson 5
-  // You can read more about how to do this here: https://auth0.com/blog/navigating-rs256-and-jwks/
-  return undefined
+  // https://auth0.com/blog/navigating-rs256-and-jwks/#Finding-the-exact-signature-verification-key
+  
+  //Retrieve the JWKS and filter for potential signature verification keys.
+  let options = {
+    headers: {
+      'Authorization': authHeader
+    }
+  }
+  let jwks
+  try{
+  let response = await Axios.get(jwksUrl, options)
+  jwks = response.data
+  } catch (e) {
+    logger.error('Error retrieving JWKS', { error: e.message })
+  }
+
+
+
+  // Extract the JWT from the request's authorization header.
+  const extractedToken = getToken(authHeader)
+  // Decode the JWT and grab the kid property from the header.
+  const jwt: Jwt = decode(extractedToken, { complete: true }) as Jwt
+  const kid = jwt.header['kid']
+  
+  // Find the signature verification key in the filtered JWKS with a matching kid property.
+  const signingKey = jwks.keys.find(key => key.kid === kid)
+
+  // Using the x5c property build a certificate which will be used to verify the JWT signature.
+  let cert = signingKey.x5c[0].match(/.{1,64}/g).join('\n');
+  cert = `-----BEGIN CERTIFICATE-----\n${cert}\n-----END CERTIFICATE-----\n`;
+  return verify(extractedToken, cert, {algorithms: ['RS256']}) as JwtPayload
 }
 
 function getToken(authHeader: string): string {
